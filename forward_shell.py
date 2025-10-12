@@ -222,7 +222,7 @@ class Shell:
 
 def main():
     print("="*60)
-    print("CTF Command Injection Shell with CD support")
+    print("Forward shell with cd and upload support")
     print("="*60)
     print("Special commands:")
     print("  cd <path>                    - Change directory")
