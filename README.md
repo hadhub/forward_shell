@@ -105,3 +105,4 @@ Special commands:
 This project is provided for educational purposes only. Use it responsibly.
 
 **Reminder**: Test only on systems for which you have explicit authorization.
+This project was generated in part with AI
