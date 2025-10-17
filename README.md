@@ -48,7 +48,7 @@ SECRET = "JWT_SECRET"          # Known JWT secret
 ### Launch
 
 ```bash
-python shell.py
+python forward_shell.py
 ```
 
 ### Special commands
